@@ -33,4 +33,4 @@ return array(
 
 Once you finished the editing the settings, upload it to your WHMCS hooks folder (“includes/hooks“).
 
-That’s all !
+Done:) !
