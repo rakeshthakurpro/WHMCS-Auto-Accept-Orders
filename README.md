@@ -1,3 +1,4 @@
+#For integration with your WHMCS, visit https://whmcsninja.com/ or email us at : whmcsninja@gmail.com
 # WHMCS-Auto-Accept-Orders
 This WHMCS Hook will auto accept orders. There is no need to manually accept them anymore ! No more “pending” orders…
 Hook is highly customizable with a settings section that will let you set the following –
