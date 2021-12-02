@@ -35,6 +35,8 @@ function get_order($invoiceid) {
     return array('id' => $order->id, 'status' => $order->status); // Don't add anything Here);
 }
 
+/*Hook code execute if invoice is paid from admin area */
+
 add_hook('InvoicePaid', 1, function($vars) {
     $settings = settings();
     $order = get_order($vars['invoiceid']);
@@ -44,6 +46,7 @@ add_hook('InvoicePaid', 1, function($vars) {
     }
 });
 
+/*Below Code Invoked while invoice paid from clientarea during order Process */
 add_hook('AfterShoppingCartCheckout', 1, function($vars) {
     $settings = settings();
     
@@ -55,9 +58,11 @@ add_hook('AfterShoppingCartCheckout', 1, function($vars) {
     $ispaid = ($Getinvoice['result'] == 'success' && $Getinvoice['balance'] <= 0) ? true : false;
     
     /*     * *******Uncomment below code if you want product to execute Module create command for products having price 0.00 ********** */
+    
     //$autosetup=($Getinvoice['result'] == 'success' && $Getinvoice['balance'] <= 0) ? true : false;
 
     /*     * *******Uncomment below code if you want product to execute Module create command for Free products ********** */
+    
 //if(!$vars['InvoiceID']){
     //  $autosetup = true;
 //}
