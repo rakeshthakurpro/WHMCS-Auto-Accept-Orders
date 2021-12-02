@@ -19,48 +19,52 @@ if (!defined("WHMCS"))
  * ******************* */
 
 use WHMCS\Database\Capsule;
-
-function AutoAcceptOrders_settings() {
+function settings(){
     $admin = Capsule::table('tbladmins')->where('roleid', 1)->first();
     return array(
-        'apiuser' => $admin->id, // Don't add anything Here
+        'admin' => $admin->id, // Don't add anything Here
         'autosetup' => false, // determines whether product provisioning is performed
         'sendregistrar' => false, // determines whether domain automation is performed
         'sendemail' => true, // sets if welcome emails for products and registration confirmation emails for domains should be sent 
         'ispaid' => true, // set to true if you want to accept only paid orders
-        'paymentmethod' => array(), // set the payment method you want to accept automaticly (leave empty to use all payment methods) * example array('paypal','amazonsimplepay')
+       
     );
 }
+function get_order($invoiceid) {
+    $order = Capsule::table('tblorders')->where('invoiceid', $invoiceid)->first();
+    return array('id' => $order->id, 'status' => $order->status); // Don't add anything Here);
+}
 
-/* * ***************** */
+add_hook('InvoicePaid', 1, function($vars) {
+    $settings = settings();
+    $order = get_order($vars['invoiceid']);
+
+    if ($order['status'] == 'Pending') {
+        $result = localAPI('AcceptOrder', array('orderid' => $order['id']), $settings['admin']);
+    }
+});
 
 add_hook('AfterShoppingCartCheckout', 1, function($vars) {
-    $settings = AutoAcceptOrders_settings();
-    $ispaid = true;
+    $settings = settings();
+    
+    $order = get_order($vars['InvoiceID']);
+    $ispaid = $settings['ispaid'];
+    $autosetup=$settings['autosetup'];
 
-    if ($vars['InvoiceID']) {
-        $Getinvoice = localAPI('getinvoice', array(
-            'invoiceid' => $vars['InvoiceID'],
-                ), $settings['apiuser']);
+    $Getinvoice = localAPI('GetInvoice', array('invoiceid' => $vars['InvoiceID'],), $settings['admin']);
+    $ispaid = ($Getinvoice['result'] == 'success' && $Getinvoice['balance'] <= 0) ? true : false;
+    
+    /*     * *******Uncomment below code if you want product to execute Module create command for products having price 0.00 ********** */
+    //$autosetup=($Getinvoice['result'] == 'success' && $Getinvoice['balance'] <= 0) ? true : false;
 
-        $ispaid = ($Getinvoice['result'] == 'success' && $Getinvoice['balance'] <= 0) ? true : false;
-       /* * *******Uncomment below code if you want product to execute Module create command for products having price 0.00 ********** */
-      //  if ($Getinvoice['subtotal']<= 0) {            
-        //    $settings['autosetup'] = true;
-       // }
-    }
-    /* * *******Uncomment below code if you want product to execute Module create command for Free products ********** */
+    /*     * *******Uncomment below code if you want product to execute Module create command for Free products ********** */
 //if(!$vars['InvoiceID']){
-  //  $settings['autosetup']=true;
+    //  $autosetup = true;
 //}
-/* * ****************************************** */
-    if ((!sizeof($settings['paymentmethod']) || sizeof($settings['paymentmethod']) && in_array($vars['PaymentMethod'], $settings['paymentmethod'])) && (!$settings['ispaid'] || $settings['ispaid'] && $ispaid)) {
-        $result = localAPI('AcceptOrder', array(
-            'orderid' => $vars['OrderID'],
-            'autosetup' => $settings['autosetup'],
-            'sendregistrar' => $settings['sendregistrar'],
-            'sendemail' => $settings['sendemail'],
-                ), $settings['apiuser']);
+    /*     * ****************************************** */
+
+    if ($ispaid) {
+        $result = localAPI('AcceptOrder', array('orderid' => $order['id'],'autosetup' => $autosetup,'sendemail' => true, ), $admin);
     }
 });
 ?>
