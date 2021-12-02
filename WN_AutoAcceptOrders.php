@@ -24,7 +24,6 @@ function settings(){
     return array(
         'admin' => $admin->id, // Don't add anything Here
         'autosetup' => false, // determines whether product provisioning is performed
-        'sendregistrar' => false, // determines whether domain automation is performed
         'sendemail' => true, // sets if welcome emails for products and registration confirmation emails for domains should be sent 
         'ispaid' => true, // set to true if you want to accept only paid orders
        
