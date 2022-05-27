@@ -1,9 +1,9 @@
-<?php
-
-/*
- *
- * Auto Accept Orders
- * Created By Rakesh Kumar(rakeshthakurpro0306@gmail.com)
+<?php 
+/**
+ * Auto accept whmcs order 
+ * Developer : Rakesh Kumar
+ * Email : whmcsninja@gmail.com
+ * Website : whmcsninja.com
  *
  * Copyrights @ www.whmcsninja.com
  * www.whmcsninja.com
@@ -11,64 +11,115 @@
  * Hook version 1.0.0
  *
  * */
-if (!defined("WHMCS"))
-    die("This file cannot be accessed directly");
-
-/* * *******************
-  Auto Accept Orders Settings
- * ******************* */
-
 use WHMCS\Database\Capsule;
-function settings(){
-    $admin = Capsule::table('tbladmins')->where('roleid', 1)->first();
-    return array(
-        'admin' => $admin->id, // Don't add anything Here
-        'autosetup' => false, // determines whether product provisioning is performed
-        'sendemail' => true, // sets if welcome emails for products and registration confirmation emails for domains should be sent 
-        'ispaid' => true, // set to true if you want to accept only paid orders
-       
-    );
-}
-function get_order($invoiceid) {
-    $order = Capsule::table('tblorders')->where('invoiceid', $invoiceid)->first();
-    return array('id' => $order->id, 'status' => $order->status); // Don't add anything Here);
-}
 
-/*Hook code execute if invoice is paid from admin area */
+
+
+
+add_hook('AfterShoppingCartCheckout', 1, function($vars) {
+	$ServiceIDs = $vars['ServiceIDs'];
+	foreach($ServiceIDs as $ServiceID)
+	{
+		 $GData = Capsule::table('tblhosting')
+            ->join('tblproducts', 'tblhosting.packageid', '=', 'tblproducts.id')
+            ->join('tblorders', 'tblhosting.orderid', '=', 'tblorders.id')
+            ->where('tblhosting.id',$ServiceID)
+            ->select('tblproducts.autosetup as productAutosetup','tblorders.id as orderid','tblhosting.firstpaymentamount as productAmount','tblhosting.id as serviceId')
+            ->get();
+
+            $isinvoicedata = Capsule::table('tblorders')->where('id',$GData[0]->orderid)->get();
+            if($isinvoicedata)
+            {
+				$isinvoice = $isinvoicedata[0]->invoiceid;
+				if($isinvoice)
+					{
+						if($GData[0]->productAutosetup == "payment")
+						{
+							$InvoiceStatus = Capsule::table('tblorders')
+							->join('tblinvoices', 'tblorders.invoiceid', '=', 'tblinvoices.id')
+							->where('tblorders.id',$GData[0]->orderid)
+							->select('tblinvoices.status')
+							->get();
+							if($GData[0]->productAmount != "0.00")
+							{
+								if($InvoiceStatus[0]->status == 'Paid')
+									{
+									MakeAcceptOrder($GData[0]->orderid,$GData[0]->serviceId);
+									}
+							}
+
+						}
+					}
+				else
+				{
+					if($GData[0]->productAutosetup == "order")
+					{
+						MakeAcceptOrder($GData[0]->orderid,$GData[0]->serviceId);
+					}
+
+					if($GData[0]->productAutosetup == "payment")
+					{
+						$InvoiceStatus = Capsule::table('tblorders')
+						->join('tblinvoices', 'tblorders.invoiceid', '=', 'tblinvoices.id')
+						->where('tblorders.id',$GData[0]->orderid)
+						->select('tblinvoices.status')
+						->get();
+						if($GData[0]->productAmount != "0.00")
+						{
+							if($InvoiceStatus[0]->status == 'Paid')
+								{
+								MakeAcceptOrder($GData[0]->orderid,$GData[0]->serviceId);
+								}
+						}
+
+					}
+				}
+            }
+          
+
+            
+	}
+	
+});
+
 
 add_hook('InvoicePaid', 1, function($vars) {
-    $settings = settings();
-    $order = get_order($vars['invoiceid']);
+	$InvoiceID = $vars['invoiceid'];
+	$GData = Capsule::table('tblorders')
+	        ->join('tblhosting', 'tblorders.id', '=', 'tblhosting.orderid')
+	        ->join('tblproducts', 'tblhosting.packageid', '=', 'tblproducts.id')
+	        ->where('tblorders.invoiceid',$InvoiceID)
+	        ->select('tblproducts.autosetup as productAutosetup','tblorders.id as orderid','tblhosting.firstpaymentamount as productAmount','tblhosting.id as serviceId')
+	        ->get();
+    
+			if($GData[0]->productAutosetup == "order")
+            {
+            	MakeAcceptOrder($GData[0]->orderid,$GData[0]->serviceId);
+            }
 
-    if ($order['status'] == 'Pending') {
-        $result = localAPI('AcceptOrder', array('orderid' => $order['id']), $settings['admin']);
-    }
+            if($GData[0]->productAutosetup == "payment")
+            {
+	            MakeAcceptOrder($GData[0]->orderid,$GData[0]->serviceId);
+            }        
+    // Perform hook code here...
 });
 
-/*Below Code Invoked while invoice paid from clientarea during order Process */
-add_hook('AfterShoppingCartCheckout', 1, function($vars) {
-    $settings = settings();
-    
-    $order = get_order($vars['InvoiceID']);
-    $ispaid = $settings['ispaid'];
-    $autosetup=$settings['autosetup'];
+function MakeAcceptOrder($OrderID = "",$ServiceID = "")
+{
+	$command = 'AcceptOrder';
+	$postData = array(
+	    'orderid' => $OrderID,
+	    'autosetup' => '1',
+	    'sendemail' => '1',
+	);
+	 $admin = Capsule::table('tbladmins')
+	            ->where('roleid', '=', 1)
+	            ->get();
+	    $adminUsername = $admin[0]->username;
 
-    $Getinvoice = localAPI('GetInvoice', array('invoiceid' => $vars['InvoiceID'],), $settings['admin']);
-    $ispaid = ($Getinvoice['result'] == 'success' && $Getinvoice['balance'] <= 0) ? true : false;
-    
-    /*     * *******Uncomment below code if you want product to execute Module create command for products having price 0.00 ********** */
-    
-    //$autosetup=($Getinvoice['result'] == 'success' && $Getinvoice['balance'] <= 0) ? true : false;
+	$results = localAPI($command, $postData, $adminUsername);
+	
+}
 
-    /*     * *******Uncomment below code if you want product to execute Module create command for Free products ********** */
-    
-//if(!$vars['InvoiceID']){
-    //  $autosetup = true;
-//}
-    /*     * ****************************************** */
 
-    if ($ispaid) {
-        $result = localAPI('AcceptOrder', array('orderid' => $order['id'],'autosetup' => $autosetup,'sendemail' => true, ), $admin);
-    }
-});
 ?>
